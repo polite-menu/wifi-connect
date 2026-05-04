@@ -205,7 +205,10 @@ impl NetworkCommandHandler {
     fn activate(&mut self) -> ExitResult {
         self.activated = true;
 
-        let networks = get_networks(&self.access_points);
+        // Rescan on GET /networks
+        self.access_points = get_access_points(&self.device)?;
+
+        let networks = get_networks(&self.access_points, &self.config.ssid);
 
         self.server_tx
             .send(NetworkCommandResponse::Networks(networks))
@@ -233,7 +236,7 @@ impl NetworkCommandHandler {
             match wifi_device.connect(access_point, &credentials) {
                 Ok((connection, state)) => {
                     if state == ConnectionState::Activated {
-                        match wait_for_connectivity(&self.manager, 20) {
+                        match wait_for_connectivity(&self.manager, 10) {
                             Ok(has_connectivity) => {
                                 if has_connectivity {
                                     info!("Internet connectivity established");
@@ -362,6 +365,12 @@ fn get_access_points_impl(device: &Device) -> Result<Vec<AccessPoint>> {
     let retries_allowed = 10;
     let mut retries = 0;
 
+    // Rescan for network access points, returned as access_points below
+    let wifi_device = device.as_wifi_device().unwrap();
+    if let Err(e) = wifi_device.request_scan() {
+        warn!("Failed to request WiFi scan: {}", e);
+    }
+
     // After stopping the hotspot we may have to wait a bit for the list
     // of access points to become available
     while retries < retries_allowed {
@@ -401,8 +410,15 @@ fn get_access_points_ssids(access_points: &[AccessPoint]) -> Vec<&str> {
         .collect()
 }
 
-fn get_networks(access_points: &[AccessPoint]) -> Vec<Network> {
-    access_points.iter().map(get_network_info).collect()
+fn get_networks(access_points: &[AccessPoint], portal_ssid: &str) -> Vec<Network> {
+    // Filter out the portal SSID (-s, --portal-ssid <ssid>). On startup,
+    // portal SSID didn't exist, so nothing to filter. But after it exists
+    // and shows up on rescans.
+    access_points
+        .iter()
+        .filter(|ap| ap.ssid().as_str().unwrap_or("") != portal_ssid)
+        .map(get_network_info)
+        .collect()
 }
 
 fn get_network_info(access_point: &AccessPoint) -> Network {
