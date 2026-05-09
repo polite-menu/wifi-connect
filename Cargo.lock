@@ -407,7 +407,6 @@ dependencies = [
 [[package]]
 name = "network-manager"
 version = "0.13.3"
-source = "git+https://github.com/balena-io-modules/network-manager.git#4da2e6a57de16b6ae911f74321f929d78af8b1ba"
 dependencies = [
  "ascii",
  "bitflags",
@@ -1134,7 +1133,7 @@ checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
 
 [[package]]
 name = "wifi-connect"
-version = "4.11.84+pmd.1"
+version = "4.11.84+pmd.2"
 dependencies = [
  "clap",
  "env_logger",

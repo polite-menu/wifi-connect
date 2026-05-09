@@ -469,7 +469,27 @@ fn create_portal_impl(
 ) -> Result<Connection> {
     info!("Starting access point...");
     let wifi_device = device.as_wifi_device().unwrap();
-    let (portal_connection, _) = wifi_device.create_hotspot(ssid, *passphrase, Some(*gateway))?;
+    // Pin to channel 1: under regdom 00 (the kernel default if no
+    // cfg80211.ieee80211_regdom is set), channels 12-14 are no-IR and AP
+    // mode is silently rejected by brcmfmac. Channels 1, 6, 11 are allowed
+    // under every regdom.
+    let (portal_connection, state) =
+        wifi_device.create_hotspot(ssid, *passphrase, Some(*gateway), Some(1))?;
+
+    // create_hotspot's internal wait has a 15s default timeout and silently
+    // returns the current state on timeout. If we accept a non-Activated
+    // connection, the gateway IP isn't on the interface yet and the HTTP
+    // server bind fails with EADDRNOTAVAIL.
+    if state != ConnectionState::Activated {
+        warn!(
+            "Access point '{}' did not reach Activated state: {:?}",
+            ssid, state
+        );
+        let _ = portal_connection.deactivate();
+        let _ = portal_connection.delete();
+        bail!(ErrorKind::CreateCaptivePortal);
+    }
+
     info!("Access point '{}' created", ssid);
     Ok(portal_connection)
 }
